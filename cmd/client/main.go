@@ -24,7 +24,9 @@ func main() {
 	if err != nil {
 		fmt.Print(err)
 	}
-	pubsub.DeclareAndBind(connection, routing.ExchangePerilDirect, fmt.Sprintf("%s.%s", routing.PauseKey, username), routing.PauseKey, pubsub.SimpleQueueTransient)
+	pubsub.DeclareAndBind(connection, routing.ExchangePerilDirect,
+		fmt.Sprintf("%s.%s", routing.PauseKey, username), routing.PauseKey, pubsub.SimpleQueueTransient)
+
 	// Wait for os.Interrupt
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, os.Interrupt)

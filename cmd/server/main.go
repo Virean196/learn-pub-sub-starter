@@ -3,9 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -13,6 +12,7 @@ import (
 
 func main() {
 	fmt.Println("Starting Peril server...")
+
 	connectionString := "amqp://guest:guest@localhost:5672/"
 	connection, err := amqp.Dial(connectionString)
 	if err != nil {
@@ -26,10 +26,27 @@ func main() {
 		log.Fatalf("Failed to open Channel on connection: %s", err)
 	}
 
-	pubsub.PublishJSON(ch, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true})
+	gamelogic.PrintClientHelp()
+	for {
+		input := gamelogic.GetInput()
+		if len(input) == 0 {
+			continue
+		}
+		switch input[0] {
+		case "pause":
+			log.Print("Sending pause message")
+			pubsub.PublishJSON(ch, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true})
+			continue
+		case "resume":
+			log.Print("Sending resume message")
+			pubsub.PublishJSON(ch, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: false})
+			continue
+		case "quit":
+			log.Print("Exiting")
+			return
+		default:
+			log.Print("Invalid command, try again")
+		}
 
-	// Wait for os.Interrupt
-	signalCh := make(chan os.Signal, 1)
-	signal.Notify(signalCh, os.Interrupt)
-	<-signalCh
+	}
 }
