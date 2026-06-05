@@ -26,6 +26,9 @@ func main() {
 		log.Fatalf("Failed to open Channel on connection: %s", err)
 	}
 
+	pubsub.DeclareAndBind(connection, routing.ExchangePerilTopic, routing.GameLogSlug,
+		fmt.Sprintf("%s.*", routing.GameLogSlug), pubsub.SimpleQueueDurable)
+
 	gamelogic.PrintClientHelp()
 	for {
 		input := gamelogic.GetInput()
@@ -48,6 +51,5 @@ func main() {
 		default:
 			log.Print("Invalid command, try again")
 		}
-
 	}
 }
