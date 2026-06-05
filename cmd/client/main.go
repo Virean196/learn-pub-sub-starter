@@ -21,12 +21,14 @@ func main() {
 	}
 	defer connection.Close()
 	username, err := gamelogic.ClientWelcome()
+
 	if err != nil {
 		fmt.Print(err)
 	}
 	pubsub.DeclareAndBind(connection, routing.ExchangePerilDirect,
 		fmt.Sprintf("%s.%s", routing.PauseKey, username), routing.PauseKey, pubsub.SimpleQueueTransient)
 
+	gamelogic.NewGameState(username)
 	// Wait for os.Interrupt
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, os.Interrupt)
