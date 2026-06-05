@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -28,9 +26,45 @@ func main() {
 	pubsub.DeclareAndBind(connection, routing.ExchangePerilDirect,
 		fmt.Sprintf("%s.%s", routing.PauseKey, username), routing.PauseKey, pubsub.SimpleQueueTransient)
 
-	gamelogic.NewGameState(username)
-	// Wait for os.Interrupt
-	signalCh := make(chan os.Signal, 1)
-	signal.Notify(signalCh, os.Interrupt)
-	<-signalCh
+	gameState := gamelogic.NewGameState(username)
+	for {
+		input := gamelogic.GetInput()
+		if len(input) == 2 {
+			fmt.Print("Invalid spawn command, try <spawn location unit>")
+			continue
+		}
+		switch input[0] {
+		case "spawn":
+			err := gameState.CommandSpawn(input)
+			if err != nil {
+				fmt.Print("Invalid spawn command")
+				continue
+			}
+		case "move":
+			_, err := gameState.CommandMove(input)
+			if err != nil {
+				fmt.Print("Invalid move command")
+				continue
+			}
+		case "status":
+			gameState.CommandStatus()
+			continue
+		case "help":
+			gamelogic.PrintClientHelp()
+			continue
+		case "spam":
+			fmt.Print("Spamming now allowed yet!\n")
+			continue
+		case "quit":
+			gamelogic.PrintQuit()
+			return
+		default:
+			fmt.Print("Invalid command, use <help>\n")
+			continue
+		}
+		// Wait for os.Interrupt
+		// 	signalCh := make(chan os.Signal, 1)
+		// 	signal.Notify(signalCh, os.Interrupt)
+		// 	<-signalCh
+	}
 }

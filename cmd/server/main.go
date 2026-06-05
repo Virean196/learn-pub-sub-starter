@@ -30,6 +30,7 @@ func main() {
 	for {
 		input := gamelogic.GetInput()
 		if len(input) == 0 {
+			fmt.Print("Invalid username")
 			continue
 		}
 		switch input[0] {
