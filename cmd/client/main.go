@@ -25,6 +25,11 @@ func main() {
 		log.Fatalf("Unable to connect to RabbitMQ: %s", err)
 	}
 	defer connection.Close()
+
+	ch, err := connection.Channel()
+	if err != nil {
+		log.Fatalf("could not open channel: %v", err)
+	}
 	username, err := gamelogic.ClientWelcome()
 
 	if err != nil {
@@ -37,6 +42,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not subscribe to pause: %v", err)
 	}
+
+	pubsub.SubscribeJSON(connection, routing.ExchangePerilTopic, fmt.Sprintf("army_moves.%s", username), "army_moves.*", pubsub.SimpleQueueTransient,
+		func(move gamelogic.ArmyMove) {
+			gameState.HandleMove(move)
+			fmt.Print("> ")
+		})
+
 	for {
 		input := gamelogic.GetInput()
 		if len(input) == 2 {
@@ -51,11 +63,13 @@ func main() {
 				continue
 			}
 		case "move":
-			_, err := gameState.CommandMove(input)
+			move, err := gameState.CommandMove(input)
 			if err != nil {
 				fmt.Print("Invalid move command")
 				continue
 			}
+			pubsub.PublishJSON(ch, routing.ExchangePerilTopic, fmt.Sprintf("army_moves.%s", username), move)
+			fmt.Print("Move published successfully")
 		case "status":
 			gameState.CommandStatus()
 			continue
