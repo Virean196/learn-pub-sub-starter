@@ -43,12 +43,21 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not subscribe to pause: %v", err)
 	}
-
+	// Handle all army_moves
 	pubsub.SubscribeJSON(connection, routing.ExchangePerilTopic, fmt.Sprintf("army_moves.%s", username), "army_moves.*", pubsub.SimpleQueueTransient,
 		func(move gamelogic.ArmyMove) pubsub.AckType {
 			moveOutcome := gameState.HandleMove(move)
 			fmt.Print("> ")
-			if moveOutcome == gamelogic.MoveOutComeSafe || moveOutcome == gamelogic.MoveOutcomeMakeWar {
+			rw := gamelogic.RecognitionOfWar{
+				Attacker: move.Player,
+				Defender: gameState.GetPlayerSnap(),
+			}
+			if moveOutcome == gamelogic.MoveOutcomeMakeWar {
+				key := fmt.Sprintf("%s.%s", routing.WarRecognitionsPrefix, move.Player.Username)
+				pubsub.PublishJSON(ch, routing.ExchangePerilTopic, key, rw)
+				return pubsub.NackRequeue
+			}
+			if moveOutcome == gamelogic.MoveOutComeSafe {
 				return pubsub.Ack
 			}
 			if moveOutcome == gamelogic.MoveOutcomeSamePlayer {
@@ -56,6 +65,29 @@ func main() {
 			}
 			return pubsub.NackDiscard
 		})
+	// Handle all army_moves
+	pubsub.SubscribeJSON(connection, routing.ExchangePerilTopic, routing.WarRecognitionsPrefix,
+		fmt.Sprintf("%s.*", routing.WarRecognitionsPrefix), pubsub.SimpleQueueDurable,
+		func(rw gamelogic.RecognitionOfWar) pubsub.AckType {
+			defer fmt.Printf("> ")
+			outcome, _, _ := gameState.HandleWar(rw)
+			switch outcome {
+			case gamelogic.WarOutcomeNotInvolved:
+				return pubsub.NackRequeue
+			case gamelogic.WarOutcomeNoUnits:
+				return pubsub.Ack
+			case gamelogic.WarOutcomeOpponentWon:
+				return pubsub.Ack
+			case gamelogic.WarOutcomeYouWon:
+				return pubsub.Ack
+			case gamelogic.WarOutcomeDraw:
+				return pubsub.Ack
+			default:
+				log.Print("Ivalid war outcome")
+				return pubsub.NackDiscard
+			}
+		})
+
 	for {
 		input := gamelogic.GetInput()
 		if len(input) == 2 {
