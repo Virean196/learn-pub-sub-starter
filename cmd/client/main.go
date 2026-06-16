@@ -54,8 +54,11 @@ func main() {
 			}
 			if moveOutcome == gamelogic.MoveOutcomeMakeWar {
 				key := fmt.Sprintf("%s.%s", routing.WarRecognitionsPrefix, move.Player.Username)
-				pubsub.PublishJSON(ch, routing.ExchangePerilTopic, key, rw)
-				return pubsub.NackRequeue
+				err = pubsub.PublishJSON(ch, routing.ExchangePerilTopic, key, rw)
+				if err != nil {
+					return pubsub.NackRequeue
+				}
+				return pubsub.Ack
 			}
 			if moveOutcome == gamelogic.MoveOutComeSafe {
 				return pubsub.Ack
