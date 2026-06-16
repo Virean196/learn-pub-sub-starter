@@ -10,10 +10,11 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
-	return func(state routing.PlayingState) {
+func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) pubsub.AckType {
+	return func(state routing.PlayingState) pubsub.AckType {
 		defer fmt.Print("> ")
 		gs.HandlePause(state)
+		return pubsub.Ack
 	}
 }
 
@@ -44,11 +45,17 @@ func main() {
 	}
 
 	pubsub.SubscribeJSON(connection, routing.ExchangePerilTopic, fmt.Sprintf("army_moves.%s", username), "army_moves.*", pubsub.SimpleQueueTransient,
-		func(move gamelogic.ArmyMove) {
-			gameState.HandleMove(move)
+		func(move gamelogic.ArmyMove) pubsub.AckType {
+			moveOutcome := gameState.HandleMove(move)
 			fmt.Print("> ")
+			if moveOutcome == gamelogic.MoveOutComeSafe || moveOutcome == gamelogic.MoveOutcomeMakeWar {
+				return pubsub.Ack
+			}
+			if moveOutcome == gamelogic.MoveOutcomeSamePlayer {
+				return pubsub.NackDiscard
+			}
+			return pubsub.NackDiscard
 		})
-
 	for {
 		input := gamelogic.GetInput()
 		if len(input) == 2 {

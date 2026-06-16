@@ -3,8 +3,17 @@ package pubsub
 import (
 	"context"
 	"encoding/json"
+	"log"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+)
+
+type AckType int
+
+const (
+	Ack AckType = iota
+	NackRequeue
+	NackDiscard
 )
 
 type SimpleQueueType int
@@ -28,7 +37,11 @@ func DeclareAndBind(conn *amqp.Connection, exchange, queueName, key string, queu
 	if err != nil {
 		return nil, amqp.Queue{}, err
 	}
-	queue, err := connCh.QueueDeclare(queueName, queueType == SimpleQueueDurable, queueType == SimpleQueueTransient, queueType == SimpleQueueTransient, false, nil)
+
+	table := amqp.Table{}
+	table["x-dead-letter-exchange"] = "peril_dlx"
+	queue, err := connCh.QueueDeclare(queueName, queueType == SimpleQueueDurable,
+		queueType == SimpleQueueTransient, queueType == SimpleQueueTransient, false, table)
 	if err != nil {
 		return nil, amqp.Queue{}, err
 	}
@@ -45,7 +58,7 @@ func SubscribeJSON[T any](
 	queueName,
 	key string,
 	queueType SimpleQueueType, // an enum to represent "durable" or "transient"
-	handler func(T),
+	handler func(T) AckType,
 ) error {
 	channel, queue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
 	if err != nil {
@@ -59,10 +72,19 @@ func SubscribeJSON[T any](
 		for item := range deliveryChan {
 			var target T
 			err = json.Unmarshal(item.Body, &target)
-			handler(target)
-			item.Ack(false)
+			ack := handler(target)
+			switch ack {
+			case Ack:
+				item.Ack(false)
+				log.Print("Ack = false")
+			case NackRequeue:
+				item.Nack(false, true)
+				log.Print("Nack = false, true")
+			case NackDiscard:
+				item.Nack(false, false)
+				log.Print("Nack = false, false")
+			}
 		}
-
 	}()
 
 	return nil
