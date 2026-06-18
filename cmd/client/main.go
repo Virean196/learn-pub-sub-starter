@@ -39,7 +39,8 @@ func main() {
 	gameState := gamelogic.NewGameState(username)
 
 	queueName := fmt.Sprintf("pause.%s", username)
-	err = pubsub.SubscribeJSON(connection, routing.ExchangePerilDirect, queueName, routing.PauseKey, pubsub.SimpleQueueTransient, handlerPause(gameState))
+	err = pubsub.SubscribeJSON(connection, routing.ExchangePerilDirect,
+		queueName, routing.PauseKey, pubsub.SimpleQueueTransient, handlerPause(gameState))
 	if err != nil {
 		log.Fatalf("could not subscribe to pause: %v", err)
 	}
@@ -68,22 +69,34 @@ func main() {
 			}
 			return pubsub.NackDiscard
 		})
-	// Handle all army_moves
+	// Handle all war
 	pubsub.SubscribeJSON(connection, routing.ExchangePerilTopic, routing.WarRecognitionsPrefix,
 		fmt.Sprintf("%s.*", routing.WarRecognitionsPrefix), pubsub.SimpleQueueDurable,
 		func(rw gamelogic.RecognitionOfWar) pubsub.AckType {
 			defer fmt.Printf("> ")
-			outcome, _, _ := gameState.HandleWar(rw)
+			outcome, winner, loser := gameState.HandleWar(rw)
 			switch outcome {
 			case gamelogic.WarOutcomeNotInvolved:
 				return pubsub.NackRequeue
 			case gamelogic.WarOutcomeNoUnits:
 				return pubsub.Ack
 			case gamelogic.WarOutcomeOpponentWon:
+				err := pubsub.PublishGameLog(ch, username, winner, loser, outcome)
+				if err != nil {
+					return pubsub.NackRequeue
+				}
 				return pubsub.Ack
 			case gamelogic.WarOutcomeYouWon:
+				err := pubsub.PublishGameLog(ch, username, winner, loser, outcome)
+				if err != nil {
+					return pubsub.NackRequeue
+				}
 				return pubsub.Ack
 			case gamelogic.WarOutcomeDraw:
+				err := pubsub.PublishGameLog(ch, username, winner, loser, outcome)
+				if err != nil {
+					return pubsub.NackRequeue
+				}
 				return pubsub.Ack
 			default:
 				log.Print("Ivalid war outcome")

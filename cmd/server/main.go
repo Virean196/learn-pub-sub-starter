@@ -26,8 +26,19 @@ func main() {
 		log.Fatalf("Failed to open Channel on connection: %s", err)
 	}
 
-	pubsub.DeclareAndBind(connection, routing.ExchangePerilTopic, routing.GameLogSlug,
-		fmt.Sprintf("%s.*", routing.GameLogSlug), pubsub.SimpleQueueDurable)
+	//	pubsub.DeclareAndBind(connection, routing.ExchangePerilTopic, routing.GameLogSlug,
+	//	fmt.Sprintf("%s.*", routing.GameLogSlug), pubsub.SimpleQueueDurable)
+
+	pubsub.SubscribeGob(connection, routing.ExchangePerilTopic, routing.GameLogSlug,
+		fmt.Sprintf("%s.*", routing.GameLogSlug), pubsub.SimpleQueueDurable,
+		func(log routing.GameLog) pubsub.AckType {
+			defer fmt.Print("> ")
+			err := gamelogic.WriteLog(log)
+			if err != nil {
+				return pubsub.NackRequeue
+			}
+			return pubsub.Ack
+		})
 
 	gamelogic.PrintClientHelp()
 	for {
